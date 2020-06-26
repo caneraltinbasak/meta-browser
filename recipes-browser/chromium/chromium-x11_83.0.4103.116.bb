@@ -1,5 +1,7 @@
 require chromium-gn.inc
 
+inherit features_check
+
 REQUIRED_DISTRO_FEATURES = "x11"
 
 DEPENDS += "\
