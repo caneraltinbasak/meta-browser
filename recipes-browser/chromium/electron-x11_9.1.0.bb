@@ -1,9 +1,10 @@
-require chromium-gn.inc
-require chromium-source.inc
+require electron-gn.inc
+require electron-source.inc
 
 REQUIRED_DISTRO_FEATURES = "x11"
 
 DEPENDS += "\
+        libnotify \
         libx11 \
         libxcomposite \
         libxcursor \
@@ -16,8 +17,4 @@ DEPENDS += "\
         libxscrnsaver \
         libxtst \
 "
-
-# Compatibility glue while we have both chromium-x11 and
-# chromium-ozone-wayland recipes, and the former used to be called just
-# "chromium".
-PROVIDES = "chromium"
+GN_ARGS_append='import("//electron/build/args/release.gn")'

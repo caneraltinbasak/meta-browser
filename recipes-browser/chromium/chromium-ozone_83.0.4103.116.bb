@@ -1,4 +1,5 @@
 require chromium-gn.inc
+require chromium-source.inc
 
 DEPENDS += "\
         at-spi2-atk \

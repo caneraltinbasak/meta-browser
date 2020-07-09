@@ -4,7 +4,7 @@
 
 inherit native
 
-SRC_URI = "git://gn.googlesource.com/gn;protocol=https;rev=cd3869be2477f7ee1aa3f27f43ee934e74722dfb"
+SRC_URI = "git://gn.googlesource.com/gn;protocol=https;rev=d585128cdaf3e6ff7bfd58641965e60c12618eb1"
 S = "${WORKDIR}/git"
 B = "${WORKDIR}/build"
 
