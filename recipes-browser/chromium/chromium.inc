@@ -1,14 +1,3 @@
-DESCRIPTION = "Chromium is an open-source browser project that aims to build a safer, faster, and more stable way for all users to experience the web."
-HOMEPAGE = "https://www.chromium.org/Home"
-
-CVE_PRODUCT = "chromium:chromium google:chrome"
-
-SRC_URI = "gclient://chromium.googlesource.com/chromium/src.git;tag=${PV};jobs=8;download_path=src"
-SRC_URI[md5sum] = "aa180a004af1cc542d5a50c36bfcabd6"
-SRC_URI[sha256sum] = "bb0c7e8dfee9f3a5e30eca7f34fc9f21caefa82a86c058c552f52b1ae2da2ac3"
-
-S = "${WORKDIR}/src"
-
 # GCC is not tested or officially supported upstream, and supporting it here
 # requires an ever-growing amount of backports and custom patches, without any
 # guarantee that the generated code will work as expected.
@@ -33,7 +22,7 @@ inherit pythonnative setuptools gclient-fetch
 # currently contains Chromium's license (BSD-3-Clause) as well as Blink's
 # (LGPL2.0, LGPL2.1 and BSD-2-Clause).
 LICENSE = "BSD-3-Clause & LGPL-2.0 & LGPL-2.1"
-LIC_FILES_CHKSUM = "\
+LIC_FILES_CHKSUM += "\
     file://${S}/LICENSE;md5=0fca02217a5d49a14dfe2d11837bb34d \
     file://${S}/LICENSE.chromium_os;md5=87dd8458232da630f5617873d42d8350 \
     file://${S}/base/third_party/cityhash/COPYING;md5=f714c995c5bd9b175938acdd69226b60 \
@@ -66,7 +55,6 @@ LIC_FILES_CHKSUM = "\
     file://${S}/ios/third_party/motion_animator_objc/LICENSE;md5=3b83ef96387f14655fc854ddc3c6bd57 \
     file://${S}/ios/third_party/motion_interchange_objc/LICENSE;md5=3b83ef96387f14655fc854ddc3c6bd57 \
     file://${S}/ios/third_party/motion_transitioning_objc/LICENSE;md5=3b83ef96387f14655fc854ddc3c6bd57 \
-    file://${S}/native_client/LICENSE;md5=cbbd27594afd089daa160d3a16dd515a \
     file://${S}/native_client_sdk/src/libraries/third_party/newlib-extras/README;md5=e944d73ca3817b7ca8656eafb9497fed \
     file://${S}/net/third_party/nss/LICENSE;md5=3b1e88e1b9c0b5a4b2881d46cce06a18 \
     file://${S}/net/third_party/quiche/src/LICENSE;md5=0fca02217a5d49a14dfe2d11837bb34d \

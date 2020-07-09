@@ -7,8 +7,8 @@
 # gclient://<packagename>;version=<version>
 #
 #
-DEPENDS_prepend = "gclient-native xz-native"
-do_fetch[depends] += "gclient-native:do_populate_sysroot xz-native:do_populate_sysroot"
+DEPENDS_prepend = "gclient-native xz-native nodejs-native"
+do_fetch[depends] += "gclient-native:do_populate_sysroot xz-native:do_populate_sysroot nodejs-native:do_populate_sysroot"
 EXTRANATIVEPATH += "gclient-native"
 
 GCLIENT ?= "gclient"
