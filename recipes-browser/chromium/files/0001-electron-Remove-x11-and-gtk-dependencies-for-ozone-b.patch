@@ -1,0 +1,681 @@
+From 777e2a38808342628c46b5308b11b6326d5876fc Mon Sep 17 00:00:00 2001
+From: Caner Altinbasak <cal@brightsign.biz>
+Date: Fri, 10 Jul 2020 15:43:44 +0100
+Subject: [PATCH] electron: Remove x11 and gtk dependencies for ozone build
+
+---
+ BUILD.gn                                      | 60 +++++++++++------
+ chromium_src/BUILD.gn                         |  6 +-
+ filenames.gni                                 | 12 +---
+ lib/browser/api/app.ts                        |  6 +-
+ shell/browser/browser_linux.cc                |  8 +++
+ shell/browser/electron_browser_main_parts.cc  |  2 +
+ shell/browser/linux/unity_service.cc          |  3 +
+ shell/browser/native_window_views.cc          | 12 +++-
+ .../linux/libnotify_notification.cc           |  6 ++
+ shell/browser/ui/file_dialog_gtk.cc           |  4 ++
+ shell/browser/ui/file_dialog_ozone.cc         | 27 ++++++++
+ shell/browser/ui/message_box_gtk.cc           |  4 ++
+ shell/browser/ui/message_box_ozone.cc         | 21 ++++++
+ shell/browser/ui/tray_icon_ozone.cc           | 65 +++++++++++++++++++
+ shell/browser/ui/tray_icon_ozone.h            | 51 +++++++++++++++
+ shell/browser/ui/views/menu_bar.cc            |  2 +-
+ shell/common/application_info_linux.cc        |  7 +-
+ shell/common/platform_util_linux.cc           |  2 +
+ 18 files changed, 259 insertions(+), 39 deletions(-)
+ create mode 100644 shell/browser/ui/file_dialog_ozone.cc
+ create mode 100644 shell/browser/ui/message_box_ozone.cc
+ create mode 100644 shell/browser/ui/tray_icon_ozone.cc
+ create mode 100644 shell/browser/ui/tray_icon_ozone.h
+
+diff --git a/BUILD.gn b/BUILD.gn
+index f70dbcba1..7c6ed0cb7 100644
+--- a/BUILD.gn
++++ b/BUILD.gn
+@@ -2,6 +2,7 @@ import("//build/config/locales.gni")
+ import("//build/config/ui.gni")
+ import("//build/config/win/manifest.gni")
+ import("//components/spellcheck/spellcheck_build_features.gni")
++import("//build/config/linux/gtk/gtk.gni")
+ import("//content/public/app/mac_helpers.gni")
+ import("//extensions/buildflags/buildflags.gni")
+ import("//pdf/features.gni")
+@@ -418,11 +419,26 @@ source_set("electron_lib") {
+       "*\bx/*",
+       "*_x11.h",
+       "*_x11.cc",
++      "*\blibrary_loaders/*",
++    ]
++  }
++
++  if (!use_ozone) {
++    extra_source_filters += [
++      "*_ozone.h",
++      "*_ozone.cc",
++    ]
++  }
++
++  if (!use_gtk) {
++    extra_source_filters += [
+       "*_gtk.h",
+       "*_gtk.cc",
+-      "*\blibrary_loaders/*",
+     ]
++  } else {
++    defines += ["USE_GTK"]
+   }
++
+   if (!is_win) {
+     extra_source_filters += [
+       "*\bwin_*.h",
+@@ -521,43 +537,47 @@ source_set("electron_lib") {
+   if (is_linux) {
+     deps += [
+       ":libnotify_loader",
+-      "//build/config/linux/gtk",
+       "//dbus",
+       "//device/bluetooth",
+       "//ui/events/devices/x11",
+       "//ui/events/platform/x11",
+-      "//ui/gtk",
+       "//ui/views/controls/webview",
+       "//ui/wm",
+     ]
++    sources += filenames.lib_sources_nss
++    if (use_gtk) {
++      deps += [
++        "//ui/gtk",
++        "//build/config/linux/gtk",
++      ]
++
++      sources += [
++        "shell/browser/ui/gtk/app_indicator_icon.cc",
++        "shell/browser/ui/gtk/app_indicator_icon.h",
++        "shell/browser/ui/gtk/app_indicator_icon_menu.cc",
++        "shell/browser/ui/gtk/app_indicator_icon_menu.h",
++        "shell/browser/ui/gtk/gtk_status_icon.cc",
++        "shell/browser/ui/gtk/gtk_status_icon.h",
++        "shell/browser/ui/gtk/menu_util.cc",
++        "shell/browser/ui/gtk/menu_util.h",
++        "shell/browser/ui/gtk/status_icon.cc",
++        "shell/browser/ui/gtk/status_icon.h",
++        "shell/browser/ui/gtk_util.cc",
++        "shell/browser/ui/gtk_util.h",
++      ]
++    }
+     if (use_x11) {
+       deps += [
+         "//ui/gfx/x",
+         "//ui/gtk:x",
+       ]
++      configs += [ "//build/config/linux:x11" ]
+     }
+     configs += [ ":gio_unix" ]
+-    configs += [ "//build/config/linux:x11" ]
+     defines += [
+       # Disable warnings for g_settings_list_schemas.
+       "GLIB_DISABLE_DEPRECATION_WARNINGS",
+     ]
+-
+-    sources += filenames.lib_sources_nss
+-    sources += [
+-      "shell/browser/ui/gtk/app_indicator_icon.cc",
+-      "shell/browser/ui/gtk/app_indicator_icon.h",
+-      "shell/browser/ui/gtk/app_indicator_icon_menu.cc",
+-      "shell/browser/ui/gtk/app_indicator_icon_menu.h",
+-      "shell/browser/ui/gtk/gtk_status_icon.cc",
+-      "shell/browser/ui/gtk/gtk_status_icon.h",
+-      "shell/browser/ui/gtk/menu_util.cc",
+-      "shell/browser/ui/gtk/menu_util.h",
+-      "shell/browser/ui/gtk/status_icon.cc",
+-      "shell/browser/ui/gtk/status_icon.h",
+-      "shell/browser/ui/gtk_util.cc",
+-      "shell/browser/ui/gtk_util.h",
+-    ]
+   }
+   if (is_win) {
+     libs += [ "dwmapi.lib" ]
+diff --git a/chromium_src/BUILD.gn b/chromium_src/BUILD.gn
+index ab6b3fc56..460bbe2f8 100644
+--- a/chromium_src/BUILD.gn
++++ b/chromium_src/BUILD.gn
+@@ -79,8 +79,8 @@ static_library("chrome") {
+   if (is_linux) {
+     sources += [ "//chrome/browser/icon_loader_auralinux.cc" ]
+     sources += [
+-      "//chrome/browser/extensions/global_shortcut_listener_x11.cc",
+-      "//chrome/browser/extensions/global_shortcut_listener_x11.h",
++      "//chrome/browser/extensions/global_shortcut_listener_ozone.cc",
++      "//chrome/browser/extensions/global_shortcut_listener_ozone.h",
+       "//chrome/browser/ui/views/status_icons/concat_menu_model.cc",
+       "//chrome/browser/ui/views/status_icons/concat_menu_model.h",
+       "//chrome/browser/ui/views/status_icons/status_icon_linux_dbus.cc",
+@@ -148,7 +148,7 @@ static_library("chrome") {
+     }
+ 
+     if (is_linux) {
+-      sources += [ "//chrome/browser/media/webrtc/window_icon_util_x11.cc" ]
++      sources += [ "//chrome/browser/media/webrtc/window_icon_util_ozone.cc" ]
+     }
+   }
+ 
+diff --git a/filenames.gni b/filenames.gni
+index 7b1e3fbe4..b14688b0c 100644
+--- a/filenames.gni
++++ b/filenames.gni
+@@ -346,6 +346,7 @@ filenames = {
+     "shell/browser/ui/file_dialog.h",
+     "shell/browser/ui/file_dialog_gtk.cc",
+     "shell/browser/ui/file_dialog_mac.mm",
++    "shell/browser/ui/file_dialog_ozone.cc",
+     "shell/browser/ui/file_dialog_win.cc",
+     "shell/browser/ui/inspectable_web_contents.cc",
+     "shell/browser/ui/inspectable_web_contents.h",
+@@ -360,14 +361,15 @@ filenames = {
+     "shell/browser/ui/message_box.h",
+     "shell/browser/ui/message_box_gtk.cc",
+     "shell/browser/ui/message_box_mac.mm",
++    "shell/browser/ui/message_box_ozone.cc",
+     "shell/browser/ui/message_box_win.cc",
+     "shell/browser/ui/tray_icon.cc",
+     "shell/browser/ui/tray_icon.h",
+     "shell/browser/ui/tray_icon_cocoa.h",
+     "shell/browser/ui/tray_icon_cocoa.mm",
+     "shell/browser/ui/tray_icon_gtk.cc",
+-    "shell/browser/ui/tray_icon_gtk.h",
+     "shell/browser/ui/tray_icon_observer.h",
++    "shell/browser/ui/tray_icon_ozone.cc",
+     "shell/browser/ui/tray_icon_win.cc",
+     "shell/browser/ui/views/autofill_popup_view.cc",
+     "shell/browser/ui/views/autofill_popup_view.h",
+@@ -376,8 +378,6 @@ filenames = {
+     "shell/browser/ui/views/electron_views_delegate_win.cc",
+     "shell/browser/ui/views/frameless_view.cc",
+     "shell/browser/ui/views/frameless_view.h",
+-    "shell/browser/ui/views/global_menu_bar_x11.cc",
+-    "shell/browser/ui/views/global_menu_bar_x11.h",
+     "shell/browser/ui/views/inspectable_web_contents_view_views.cc",
+     "shell/browser/ui/views/inspectable_web_contents_view_views.h",
+     "shell/browser/ui/views/menu_bar.cc",
+@@ -408,12 +408,6 @@ filenames = {
+     "shell/browser/ui/win/notify_icon_host.h",
+     "shell/browser/ui/win/taskbar_host.cc",
+     "shell/browser/ui/win/taskbar_host.h",
+-    "shell/browser/ui/x/event_disabler.cc",
+-    "shell/browser/ui/x/event_disabler.h",
+-    "shell/browser/ui/x/window_state_watcher.cc",
+-    "shell/browser/ui/x/window_state_watcher.h",
+-    "shell/browser/ui/x/x_window_utils.cc",
+-    "shell/browser/ui/x/x_window_utils.h",
+     "shell/browser/unresponsive_suppressor.cc",
+     "shell/browser/unresponsive_suppressor.h",
+     "shell/browser/web_contents_permission_helper.cc",
+diff --git a/lib/browser/api/app.ts b/lib/browser/api/app.ts
+index bea90c983..a516a9c7d 100644
+--- a/lib/browser/api/app.ts
++++ b/lib/browser/api/app.ts
+@@ -70,9 +70,9 @@ App.prototype.isPackaged = (() => {
+ 
+ app._setDefaultAppPaths = (packagePath) => {
+   // Set the user path according to application's name.
+-  app.setPath('userData', path.join(app.getPath('appData'), app.name!));
+-  app.setPath('userCache', path.join(app.getPath('cache'), app.name!));
+-  app.setAppPath(packagePath);
++  // app.setPath('userData', path.join(app.getPath('appData'), app.name!));
++  // app.setPath('userCache', path.join(app.getPath('cache'), app.name!));
++  // app.setAppPath(packagePath);
+ 
+   // Add support for --user-data-dir=
+   if (app.commandLine.hasSwitch('user-data-dir')) {
+diff --git a/shell/browser/browser_linux.cc b/shell/browser/browser_linux.cc
+index c6029854e..242d8a635 100644
+--- a/shell/browser/browser_linux.cc
++++ b/shell/browser/browser_linux.cc
+@@ -142,7 +142,9 @@ base::string16 Browser::GetApplicationNameForProtocol(const GURL& url) {
+ 
+ bool Browser::SetBadgeCount(int count) {
+   if (IsUnityRunning()) {
++#if defined(USE_X11)
+     unity::SetDownloadCount(count);
++#endif
+     badge_count_ = count;
+     return true;
+   } else {
+@@ -166,7 +168,11 @@ std::string Browser::GetExecutableFileProductName() const {
+ }
+ 
+ bool Browser::IsUnityRunning() {
++#if defined(USE_X11)
+   return unity::IsRunning();
++#else
++  return false;
++#endif
+ }
+ 
+ bool Browser::IsEmojiPanelSupported() {
+@@ -174,6 +180,7 @@ bool Browser::IsEmojiPanelSupported() {
+ }
+ 
+ void Browser::ShowAboutPanel() {
++#if defined(USE_X11)
+   const auto& opts = about_panel_options_;
+ 
+   if (!opts.is_dict()) {
+@@ -234,6 +241,7 @@ void Browser::ShowAboutPanel() {
+ 
+   gtk_dialog_run(GTK_DIALOG(dialog));
+   gtk_widget_destroy(dialogWidget);
++#endif
+ }
+ 
+ void Browser::SetAboutPanelOptions(base::DictionaryValue options) {
+diff --git a/shell/browser/electron_browser_main_parts.cc b/shell/browser/electron_browser_main_parts.cc
+index 9f49ad526..9579196d4 100644
+--- a/shell/browser/electron_browser_main_parts.cc
++++ b/shell/browser/electron_browser_main_parts.cc
+@@ -69,10 +69,12 @@
+ #include "ui/events/devices/x11/touch_factory_x11.h"
+ #include "ui/gfx/color_utils.h"
+ #include "ui/gfx/x/x11_types.h"
++#if defined(USE_GTK)
+ #include "ui/gtk/gtk_ui.h"
+ #include "ui/gtk/gtk_ui_delegate.h"
+ #include "ui/gtk/gtk_ui_delegate_x11.h"
+ #include "ui/gtk/gtk_util.h"
++#endif
+ #include "ui/views/linux_ui/linux_ui.h"
+ #endif
+ 
+diff --git a/shell/browser/linux/unity_service.cc b/shell/browser/linux/unity_service.cc
+index 78cca845f..0f5403781 100644
+--- a/shell/browser/linux/unity_service.cc
++++ b/shell/browser/linux/unity_service.cc
+@@ -5,7 +5,10 @@
+ #include "shell/browser/linux/unity_service.h"
+ 
+ #include <dlfcn.h>
++#ifdef USE_GTK
+ #include <gtk/gtk.h>
++#endif
++#include <glib.h>
+ 
+ #include <memory>
+ #include <string>
+diff --git a/shell/browser/native_window_views.cc b/shell/browser/native_window_views.cc
+index e9605a376..2bcaca6c5 100644
+--- a/shell/browser/native_window_views.cc
++++ b/shell/browser/native_window_views.cc
+@@ -65,6 +65,11 @@
+ #include "ui/display/screen.h"
+ #include "ui/display/win/screen_win.h"
+ #include "ui/views/widget/desktop_aura/desktop_native_widget_aura.h"
++#else
++#include "shell/browser/browser.h"
++#include "shell/browser/ui/views/frameless_view.h"
++#include "shell/browser/ui/views/native_frame_view.h"
++#include "ui/views/window/native_frame_view.h"
+ #endif
+ 
+ namespace electron {
+@@ -435,6 +440,8 @@ bool NativeWindowViews::IsEnabled() {
+   return ::IsWindowEnabled(GetAcceleratedWidget());
+ #elif defined(USE_X11)
+   return !event_disabler_.get();
++#else
++  return true;
+ #endif
+ }
+ 
+@@ -484,15 +491,15 @@ void NativeWindowViews::SetEnabledInternal(bool enable) {
+ #endif
+ }
+ 
+-#if defined(USE_X11)
+ void NativeWindowViews::Maximize() {
++#if defined(USE_X11)
+   if (IsVisible())
+     widget()->Maximize();
+   else
+     widget()->native_widget_private()->Show(ui::SHOW_STATE_MAXIMIZED,
+                                             gfx::Rect());
+-}
+ #endif
++}
+ 
+ void NativeWindowViews::Unmaximize() {
+ #if defined(OS_WIN)
+@@ -1372,6 +1379,7 @@ bool NativeWindowViews::CanMinimize() const {
+ #elif defined(USE_X11)
+   return true;
+ #endif
++  return false;
+ }
+ 
+ base::string16 NativeWindowViews::GetWindowTitle() const {
+diff --git a/shell/browser/notifications/linux/libnotify_notification.cc b/shell/browser/notifications/linux/libnotify_notification.cc
+index 27f7b4305..61fc49de4 100644
+--- a/shell/browser/notifications/linux/libnotify_notification.cc
++++ b/shell/browser/notifications/linux/libnotify_notification.cc
+@@ -13,11 +13,15 @@
+ #include "base/strings/string_util.h"
+ #include "base/strings/utf_string_conversions.h"
+ #include "shell/browser/notifications/notification_delegate.h"
++#ifdef USE_GTK
+ #include "shell/browser/ui/gtk_util.h"
++#endif
+ #include "shell/common/application_info.h"
+ #include "shell/common/platform_util.h"
+ #include "third_party/skia/include/core/SkBitmap.h"
++#ifdef USE_GTK
+ #include "ui/gtk/gtk_util.h"
++#endif
+ 
+ namespace electron {
+ 
+@@ -110,12 +114,14 @@ void LibnotifyNotification::Show(const NotificationOptions& options) {
+   // Set the urgency level of the notification.
+   libnotify_loader_.notify_notification_set_urgency(notification_, urgency);
+ 
++#if defined(USE_X11)
+   if (!options.icon.drawsNothing()) {
+     GdkPixbuf* pixbuf = gtk_util::GdkPixbufFromSkBitmap(options.icon);
+     libnotify_loader_.notify_notification_set_image_from_pixbuf(notification_,
+                                                                 pixbuf);
+     g_object_unref(pixbuf);
+   }
++#endif
+ 
+   // Set the timeout duration for the notification
+   bool neverTimeout = options.timeout_type == base::ASCIIToUTF16("never");
+diff --git a/shell/browser/ui/file_dialog_gtk.cc b/shell/browser/ui/file_dialog_gtk.cc
+index 146201f66..4c100df6c 100644
+--- a/shell/browser/ui/file_dialog_gtk.cc
++++ b/shell/browser/ui/file_dialog_gtk.cc
+@@ -136,8 +136,12 @@ class FileChooserDialog {
+ 
+     // We need to call gtk_window_present after making the widgets visible to
+     // make sure window gets correctly raised and gets focus.
++#if defined(USE_X11)
+     int time = ui::X11EventSource::GetInstance()->GetTimestamp();
+     gtk_window_present_with_time(GTK_WINDOW(dialog_), time);
++#else
++    gtk_window_present(GTK_WINDOW(dialog_));
++#endif
+   }
+ 
+   void RunSaveAsynchronous(
+diff --git a/shell/browser/ui/file_dialog_ozone.cc b/shell/browser/ui/file_dialog_ozone.cc
+new file mode 100644
+index 000000000..4185eb9c1
+--- /dev/null
++++ b/shell/browser/ui/file_dialog_ozone.cc
+@@ -0,0 +1,27 @@
++// Copyright (c) 2020 GitHub, Inc.
++// Use of this source code is governed by the MIT license that can be
++// found in the LICENSE file.
++
++#include "shell/browser/ui/file_dialog.h"
++namespace file_dialog {
++
++DialogSettings::DialogSettings() = default;
++DialogSettings::DialogSettings(const DialogSettings&) = default;
++DialogSettings::~DialogSettings() = default;
++
++bool ShowOpenDialogSync(const DialogSettings& settings,
++                        std::vector<base::FilePath>* paths) {
++  return false;
++}
++
++void ShowOpenDialog(const DialogSettings& settings,
++                    gin_helper::Promise<gin_helper::Dictionary> promise) {}
++
++bool ShowSaveDialogSync(const DialogSettings& settings, base::FilePath* path) {
++  return false;
++}
++
++void ShowSaveDialog(const DialogSettings& settings,
++                    gin_helper::Promise<gin_helper::Dictionary> promise) {}
++
++}  // namespace file_dialog
+diff --git a/shell/browser/ui/message_box_gtk.cc b/shell/browser/ui/message_box_gtk.cc
+index 6dbe28e86..2e0d37e5c 100644
+--- a/shell/browser/ui/message_box_gtk.cc
++++ b/shell/browser/ui/message_box_gtk.cc
+@@ -135,8 +135,12 @@ class GtkMessageBox : public NativeWindowObserver {
+     gtk_widget_show(dialog_);
+     // We need to call gtk_window_present after making the widgets visible to
+     // make sure window gets correctly raised and gets focus.
++#if defined(USE_X11)
+     int time = ui::X11EventSource::GetInstance()->GetTimestamp();
+     gtk_window_present_with_time(GTK_WINDOW(dialog_), time);
++#else
++    gtk_window_present(GTK_WINDOW(dialog_));
++#endif
+   }
+ 
+   int RunSynchronous() {
+diff --git a/shell/browser/ui/message_box_ozone.cc b/shell/browser/ui/message_box_ozone.cc
+new file mode 100644
+index 000000000..97f426422
+--- /dev/null
++++ b/shell/browser/ui/message_box_ozone.cc
+@@ -0,0 +1,21 @@
++// Copyright (c) 2015 GitHub, Inc.
++// Use of this source code is governed by the MIT license that can be
++// found in the LICENSE file.
++
++#include "shell/browser/ui/message_box.h"
++namespace electron {
++
++MessageBoxSettings::MessageBoxSettings() = default;
++MessageBoxSettings::MessageBoxSettings(const MessageBoxSettings&) = default;
++MessageBoxSettings::~MessageBoxSettings() = default;
++
++int ShowMessageBoxSync(const MessageBoxSettings& settings) {}
++
++void ShowMessageBox(const MessageBoxSettings& settings,
++                    MessageBoxCallback callback) {}
++
++// Like ShowMessageBox with simplest settings, but safe to call at very early
++// stage of application.
++void ShowErrorBox(const base::string16& title, const base::string16& content) {}
++
++}  // namespace electron
+diff --git a/shell/browser/ui/tray_icon_ozone.cc b/shell/browser/ui/tray_icon_ozone.cc
+new file mode 100644
+index 000000000..81bbe7982
+--- /dev/null
++++ b/shell/browser/ui/tray_icon_ozone.cc
+@@ -0,0 +1,65 @@
++// Copyright (c) 2014 GitHub, Inc.
++// Use of this source code is governed by the MIT license that can be
++// found in the LICENSE file.
++
++#include "shell/browser/ui/tray_icon_ozone.h"
++
++#include "base/strings/stringprintf.h"
++#include "base/strings/utf_string_conversions.h"
++#include "shell/browser/browser.h"
++#include "shell/common/application_info.h"
++#include "ui/gfx/image/image.h"
++#include "ui/views/linux_ui/linux_ui.h"
++
++namespace electron {
++
++TrayIconOzone::TrayIconOzone() {}
++
++TrayIconOzone::~TrayIconOzone() {}
++
++void TrayIconOzone::SetImage(const gfx::Image& image) {
++  if (icon_) {
++    icon_->SetIcon(image.AsImageSkia());
++    return;
++  }
++}
++
++void TrayIconOzone::SetToolTip(const std::string& tool_tip) {
++  icon_->SetToolTip(base::UTF8ToUTF16(tool_tip));
++}
++
++void TrayIconOzone::SetContextMenu(ElectronMenuModel* menu_model) {
++  icon_->UpdatePlatformContextMenu(menu_model);
++}
++
++const gfx::ImageSkia& TrayIconOzone::GetImage() const {
++  NOTREACHED();
++  return dummy_image_;
++}
++
++const base::string16& TrayIconOzone::GetToolTip() const {
++  NOTREACHED();
++  return dummy_string_;
++}
++
++ui::MenuModel* TrayIconOzone::GetMenuModel() const {
++  NOTREACHED();
++  return nullptr;
++}
++
++void TrayIconOzone::OnImplInitializationFailed() {}
++
++void TrayIconOzone::OnClick() {
++  NotifyClicked();
++}
++
++bool TrayIconOzone::HasClickAction() {
++  return false;
++}
++
++// static
++TrayIcon* TrayIcon::Create(base::Optional<UUID> guid) {
++  return new TrayIconOzone;
++}
++
++}  // namespace electron
+diff --git a/shell/browser/ui/tray_icon_ozone.h b/shell/browser/ui/tray_icon_ozone.h
+new file mode 100644
+index 000000000..00c5f3a81
+--- /dev/null
++++ b/shell/browser/ui/tray_icon_ozone.h
+@@ -0,0 +1,51 @@
++// Copyright (c) 2020 GitHub, Inc.
++// Use of this source code is governed by the MIT license that can be
++// found in the LICENSE file.
++
++#ifndef SHELL_BROWSER_UI_TRAY_ICON_OZONE_H_
++#define SHELL_BROWSER_UI_TRAY_ICON_OZONE_H_
++
++#include <memory>
++#include <string>
++
++#include "shell/browser/ui/tray_icon.h"
++#include "ui/views/linux_ui/status_icon_linux.h"
++
++namespace views {
++class StatusIconLinux;
++}
++
++namespace electron {
++
++class TrayIconOzone : public TrayIcon, public views::StatusIconLinux::Delegate {
++ public:
++  TrayIconOzone();
++  ~TrayIconOzone() override;
++
++  // TrayIcon:
++  void SetImage(ImageType image) override;
++  void SetToolTip(const std::string& tool_tip) override;
++  void SetContextMenu(ElectronMenuModel* menu_model) override;
++
++  // views::StatusIconLinux::Delegate
++  void OnClick() override;
++  bool HasClickAction() override;
++  // The following four methods are only used by StatusIconLinuxDbus, which we
++  // aren't yet using, so they are given stub implementations.
++  const gfx::ImageSkia& GetImage() const override;
++  const base::string16& GetToolTip() const override;
++  ui::MenuModel* GetMenuModel() const override;
++  void OnImplInitializationFailed() override;
++
++ private:
++  std::unique_ptr<views::StatusIconLinux> icon_;
++
++  gfx::ImageSkia dummy_image_;
++  base::string16 dummy_string_;
++
++  DISALLOW_COPY_AND_ASSIGN(TrayIconOzone);
++};
++
++}  // namespace electron
++
++#endif  // SHELL_BROWSER_UI_TRAY_ICON_OZONE_H_
+diff --git a/shell/browser/ui/views/menu_bar.cc b/shell/browser/ui/views/menu_bar.cc
+index 54059b228..e48dff580 100644
+--- a/shell/browser/ui/views/menu_bar.cc
++++ b/shell/browser/ui/views/menu_bar.cc
+@@ -17,7 +17,7 @@
+ #include "ui/views/layout/box_layout.h"
+ #include "ui/views/widget/widget.h"
+ 
+-#if defined(USE_X11)
++#if defined(USE_GTK)
+ #include "ui/gtk/gtk_util.h"
+ #endif
+ 
+diff --git a/shell/common/application_info_linux.cc b/shell/common/application_info_linux.cc
+index 44d140484..aa253accd 100644
+--- a/shell/common/application_info_linux.cc
++++ b/shell/common/application_info_linux.cc
+@@ -14,8 +14,11 @@
+ #include "base/logging.h"
+ #include "electron/electron_version.h"
+ #include "shell/common/platform_util.h"
++#ifdef USE_GTK
+ #include "ui/gtk/gtk_util.h"
++#endif
+ 
++/*
+ namespace {
+ 
+ GDesktopAppInfo* get_desktop_app_info() {
+@@ -29,13 +32,14 @@ GDesktopAppInfo* get_desktop_app_info() {
+ }
+ 
+ }  // namespace
+-
++*/
+ namespace electron {
+ 
+ std::string GetApplicationName() {
+   // attempt #1: the string set in app.setName()
+   std::string ret = GetOverriddenApplicationName();
+ 
++  /*
+   // attempt #2: the 'Name' entry from .desktop file's [Desktop] section
+   if (ret.empty()) {
+     GDesktopAppInfo* info = get_desktop_app_info();
+@@ -47,6 +51,7 @@ std::string GetApplicationName() {
+       g_clear_pointer(&str, g_free);
+     }
+   }
++  */
+ 
+   // attempt #3: Electron's name
+   if (ret.empty()) {
+diff --git a/shell/common/platform_util_linux.cc b/shell/common/platform_util_linux.cc
+index df2a744b0..dd4034630 100644
+--- a/shell/common/platform_util_linux.cc
++++ b/shell/common/platform_util_linux.cc
+@@ -12,7 +12,9 @@
+ #include "base/nix/xdg_util.h"
+ #include "base/process/kill.h"
+ #include "base/process/launch.h"
++#ifdef USE_GTK
+ #include "ui/gtk/gtk_util.h"
++#endif
+ #include "url/gurl.h"
+ 
+ #define ELECTRON_TRASH "ELECTRON_TRASH"
+-- 
+2.20.1
+
