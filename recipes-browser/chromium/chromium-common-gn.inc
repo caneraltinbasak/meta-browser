@@ -1,4 +1,4 @@
-inherit gtk-icon-cache qemu
+inherit qemu
 
 # The actual directory name in out/ is irrelevant for GN.
 OUTPUT_DIR = "out/Release"
@@ -62,10 +62,10 @@ DEPENDS += " \
     expat \
     flac \
     freetype \
+    freetype-native \
     glib-2.0 \
     gn-native \
     gperf-native \
-    gtk+3 \
     jpeg \
     libdrm \
     libwebp \

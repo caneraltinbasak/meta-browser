@@ -3,6 +3,8 @@ require chromium-unbundle.inc
 require gn-utils.inc
 require chromium-common-gn.inc
 
+inherit gtk-icon-cache
+
 PACKAGECONFIG[proprietary-codecs] = ' \
         ffmpeg_branding="Chrome" proprietary_codecs=true, \
         ffmpeg_branding="Chromium" proprietary_codecs=false \
