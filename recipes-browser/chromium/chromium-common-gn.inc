@@ -65,7 +65,6 @@ DEPENDS += " \
     glib-2.0 \
     gn-native \
     gperf-native \
-    gtk+3 \
     jpeg \
     libdrm \
     libwebp \
