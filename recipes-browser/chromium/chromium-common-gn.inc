@@ -62,6 +62,7 @@ DEPENDS += " \
     expat \
     flac \
     freetype \
+    freetype-native \
     glib-2.0 \
     gn-native \
     gperf-native \
