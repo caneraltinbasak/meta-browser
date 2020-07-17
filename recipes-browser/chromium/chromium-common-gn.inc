@@ -1,4 +1,4 @@
-inherit features_check gtk-icon-cache qemu
+inherit qemu
 
 # The actual directory name in out/ is irrelevant for GN.
 OUTPUT_DIR = "out/Release"
