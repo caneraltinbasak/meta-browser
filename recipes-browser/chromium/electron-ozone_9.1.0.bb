@@ -38,4 +38,5 @@ GN_ARGS += "\
         use_gtk=false \
 "
 
-SRC_URI += " file://0001-electron-Remove-x11-and-gtk-dependencies-for-ozone-b.patch;patchdir=${S}/electron"
+SRC_URI += " file://0001-electron-Remove-x11-and-gtk-dependencies-for-ozone-b.patch;patchdir=${S}/electron \
+"

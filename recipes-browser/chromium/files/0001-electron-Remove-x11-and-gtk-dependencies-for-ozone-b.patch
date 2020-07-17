@@ -1,10 +1,10 @@
-From 777e2a38808342628c46b5308b11b6326d5876fc Mon Sep 17 00:00:00 2001
+From 70d0123da6426e507bfdf30637cc9d803bdb395e Mon Sep 17 00:00:00 2001
 From: Caner Altinbasak <cal@brightsign.biz>
 Date: Fri, 10 Jul 2020 15:43:44 +0100
 Subject: [PATCH] electron: Remove x11 and gtk dependencies for ozone build
 
 ---
- BUILD.gn                                      | 60 +++++++++++------
+ BUILD.gn                                      | 64 +++++++++++-------
  chromium_src/BUILD.gn                         |  6 +-
  filenames.gni                                 | 12 +---
  lib/browser/api/app.ts                        |  6 +-
@@ -22,14 +22,14 @@ Subject: [PATCH] electron: Remove x11 and gtk dependencies for ozone build
  shell/browser/ui/views/menu_bar.cc            |  2 +-
  shell/common/application_info_linux.cc        |  7 +-
  shell/common/platform_util_linux.cc           |  2 +
- 18 files changed, 259 insertions(+), 39 deletions(-)
+ 18 files changed, 261 insertions(+), 41 deletions(-)
  create mode 100644 shell/browser/ui/file_dialog_ozone.cc
  create mode 100644 shell/browser/ui/message_box_ozone.cc
  create mode 100644 shell/browser/ui/tray_icon_ozone.cc
  create mode 100644 shell/browser/ui/tray_icon_ozone.h
 
 diff --git a/BUILD.gn b/BUILD.gn
-index f70dbcba1..7c6ed0cb7 100644
+index f70dbcba1..a03a886c1 100644
 --- a/BUILD.gn
 +++ b/BUILD.gn
 @@ -2,6 +2,7 @@ import("//build/config/locales.gni")
@@ -75,8 +75,8 @@ index f70dbcba1..7c6ed0cb7 100644
 -      "//build/config/linux/gtk",
        "//dbus",
        "//device/bluetooth",
-       "//ui/events/devices/x11",
-       "//ui/events/platform/x11",
+-      "//ui/events/devices/x11",
+-      "//ui/events/platform/x11",
 -      "//ui/gtk",
        "//ui/views/controls/webview",
        "//ui/wm",
@@ -105,6 +105,8 @@ index f70dbcba1..7c6ed0cb7 100644
 +    }
      if (use_x11) {
        deps += [
++        "//ui/events/devices/x11",
++        "//ui/events/platform/x11",
          "//ui/gfx/x",
          "//ui/gtk:x",
        ]
