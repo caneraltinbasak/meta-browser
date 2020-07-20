@@ -5,7 +5,7 @@
 inherit native
 
 SRC_URI = "git://gn.googlesource.com/gn;protocol=https"
-SRCREV = "cd3869be2477f7ee1aa3f27f43ee934e74722dfb"
+SRCREV = "d585128cdaf3e6ff7bfd58641965e60c12618eb1"
 PV = "1.0+git${SRCPV}"
 S = "${WORKDIR}/git"
 B = "${WORKDIR}/build"
